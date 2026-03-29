@@ -33,6 +33,12 @@ Built with Golang and the stunning [Charm](https://charm.sh) ecosystem (`bubblet
 
 Ensure you have Go installed on your machine.
 
+**Recommended: Install via Atlas Hub**
+Simply open your hub and select `atlas.archive` from the central catalog to quickly install or update it.
+```bash
+atlas.hub
+```
+
 **Install directly via Go**:
 ```bash
 go install github.com/fezcode/atlas.archive@latest
