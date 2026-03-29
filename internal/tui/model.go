@@ -60,6 +60,7 @@ type model struct {
 	// Processing
 	processingMsg string
 	err           error
+	outPath       string
 	
 	width  int
 	height int
@@ -116,7 +117,8 @@ func (m model) Init() tea.Cmd {
 }
 
 type processFinishedMsg struct {
-	err error
+	err     error
+	outPath string
 }
 
 func startProcessing(m model) tea.Cmd {
@@ -128,7 +130,7 @@ func startProcessing(m model) tea.Cmd {
 			}
 			outPath := filepath.Join(m.cwd, m.archiveName+m.formats[m.formatCursor])
 			err := archiver.Archive(filesToArchive, outPath)
-			return processFinishedMsg{err: err}
+			return processFinishedMsg{err: err, outPath: outPath}
 		} else {
 			// Extract
 			outDir := strings.TrimSuffix(filepath.Base(m.extractFile), filepath.Ext(m.extractFile))
@@ -139,7 +141,7 @@ func startProcessing(m model) tea.Cmd {
 			// create dir if not exists
 			os.MkdirAll(outPath, os.ModePerm)
 			err := archiver.Unarchive(m.extractFile, outPath)
-			return processFinishedMsg{err: err}
+			return processFinishedMsg{err: err, outPath: outPath}
 		}
 	}
 }
@@ -172,6 +174,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case processFinishedMsg:
 		m.err = msg.err
+		m.outPath = msg.outPath
 		m.step = StepDone
 		return m, nil
 	}
@@ -217,6 +220,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(m.fileEntries) > 0 && m.fileCursor < len(m.fileEntries) && m.fileEntries[m.fileCursor].IsDir() {
 					m.cwd = filepath.Join(m.cwd, m.fileEntries[m.fileCursor].Name())
 					m.loadFileEntries()
+				}
+			case "r":
+				if m.action == ActionArchive {
+					m.selectedDirs = make(map[string]bool)
 				}
 			case " ":
 				if m.action == ActionArchive && len(m.fileEntries) > 0 {
@@ -363,6 +370,10 @@ func (m model) View() string {
 
 	case StepSelectFiles:
 		s.WriteString(titleStyle.Render("Select file(s) in " + m.cwd))
+		if m.action == ActionArchive && len(m.selectedDirs) > 0 {
+			s.WriteString("\n")
+			s.WriteString(subtitleStyle.Render(fmt.Sprintf("  (%d items selected)", len(m.selectedDirs))))
+		}
 		s.WriteString("\n\n")
 		
 		// Rendering files
@@ -416,7 +427,7 @@ func (m model) View() string {
 
 		help := "\n↑/k: up • ↓/j: down • ←/h: parent dir • →/l: enter dir\n"
 		if m.action == ActionArchive {
-			help += "space: toggle selection • enter: confirm • ctrl+c: quit"
+			help += "space: toggle selection • r: reset • enter: confirm • ctrl+c: quit"
 		} else {
 			help += "enter: extract selected • ctrl+c: quit"
 		}
@@ -449,6 +460,21 @@ func (m model) View() string {
 		if m.action == ActionArchive {
 			s.WriteString(fmt.Sprintf("  %s %s%s\n", keyStyle.Render("Archive Name:"), valueStyle.Render(m.archiveName), valueStyle.Render(m.formats[m.formatCursor])))
 			s.WriteString(fmt.Sprintf("  %s %d\n", keyStyle.Render("Files to archive:"), len(m.selectedDirs)))
+			
+			var paths []string
+			for p := range m.selectedDirs {
+				paths = append(paths, filepath.Base(p))
+			}
+			sort.Strings(paths)
+			
+			for i, p := range paths {
+				if i >= 5 {
+					s.WriteString(fmt.Sprintf("    %s\n", mutedStyle.Render(fmt.Sprintf("...and %d more", len(paths)-5))))
+					break
+				}
+				s.WriteString(fmt.Sprintf("    %s\n", valueStyle.Render("- "+p)))
+			}
+			s.WriteString("\n")
 		} else {
 			s.WriteString(fmt.Sprintf("  %s %s\n", keyStyle.Render("File to extract:"), valueStyle.Render(filepath.Base(m.extractFile))))
 			outDir := strings.TrimSuffix(filepath.Base(m.extractFile), filepath.Ext(m.extractFile))
@@ -471,8 +497,12 @@ func (m model) View() string {
 			s.WriteString(dangerStyle.Render("❌ Error: " + m.err.Error()))
 		} else {
 			s.WriteString(successStyle.Render("✅ operation completed successfully."))
+			if m.outPath != "" {
+				s.WriteString("\n\n")
+				s.WriteString(fmt.Sprintf("  %s %s", keyStyle.Render("Saved to:"), valueStyle.Render(m.outPath)))
+			}
 		}
-		s.WriteString("\n\nPress any key to exit.")
+		s.WriteString(helpStyle.Render("\n\nPress any key to exit."))
 	}
 
 	return appStyle.Render(s.String())
