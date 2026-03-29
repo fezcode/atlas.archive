@@ -1,4 +1,5 @@
 (name) atlas.archive
 (version) 0.1.0
 (description) An interactive step-by-step archiver and extractor.
+(category) System
 (license) MIT
